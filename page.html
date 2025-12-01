@@ -1,0 +1,1080 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <title>Full Stack Coursework</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+
+  <!-- Tailwind CDN -->
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: { brandYellow: '#FFD400', sand: '#F6EFE6', brandTeal: '#126B73' }
+        }
+      }
+    }
+  </script>
+
+  <style>
+    [v-cloak]{ display:none; }
+    .text-smooth { -webkit-font-smoothing: antialiased; -moz-osx-font-smoothing: grayscale; }
+  </style>
+
+  <!-- Font Awesome -->
+  <link rel="stylesheet"
+        href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css"
+        crossorigin="anonymous" referrerpolicy="no-referrer" />
+
+  <!-- Vue 2 -->
+  <script src="https://unpkg.com/vue@2.7.8/dist/vue.js"></script>
+</head>
+<body class="bg-black text-white">
+
+<div id="app" v-cloak class="min-h-screen">
+
+  <!-- ========= GLOBAL HEADER ========= -->
+  <header class="absolute inset-x-0 top-0 z-30">
+    <div class="max-w-7xl mx-auto px-4">
+      <!-- The :class here switches text colour based on view -->
+      <div class="flex items-center justify-between py-4" :class="headerTextClass">
+        <!-- Logo -->
+        <a href="#" @click.prevent="goHome" class="flex items-center gap-2 font-semibold">
+          <svg viewBox="0 0 24 24" class="w-7 h-7" fill="none" stroke="currentColor" stroke-width="1.5">
+            <circle cx="12" cy="12" r="4" fill="currentColor"></circle>
+            <path d="M12 2v3M12 19v3M2 12h3M19 12h3M4.2 4.2l2.1 2.1M17.7 17.7l2.1 2.1M4.2 19.8l2.1-2.1M17.7 6.3l2.1-2.1" />
+          </svg>
+          <span class="text-lg">SkillSphere</span>
+        </a>
+
+        <!-- Desktop nav -->
+        <nav class="hidden md:flex items-center gap-6"
+             :class="headerTextClass"
+             v-show="view==='landing' || view==='classes'">
+          <a href="#" class="hover:opacity-80 font-medium" @click.prevent="goClasses">
+            Explore
+          </a>
+          <a href="#" class="hover:opacity-80 font-medium" @click.prevent="goCart">
+            My Classes
+          </a>
+        </nav>
+
+        <!-- Right actions -->
+        <div class="hidden md:flex items-center gap-3" :class="headerTextClass">
+          <!-- Language dropdown (desktop) -->
+          <div class="relative" @keydown.esc="langOpen=false">
+            <button
+              @click="langOpen = !langOpen"
+              :class="[
+                'flex items-center gap-2 px-3 py-2 rounded-lg text-sm backdrop-blur border',
+                headerIsLanding
+                  ? 'bg-black/60 text-white border-white/40'
+                  : 'bg-white/80 text-black border-gray-300'
+              ]"
+              aria-haspopup="listbox"
+              :aria-expanded="String(langOpen)"
+            >
+              <span>{{ currentLang }}</span>
+              <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+                <path d="M6 9l6 6 6-6"/>
+              </svg>
+            </button>
+            <div
+              v-show="langOpen"
+              :class="[
+                'absolute right-0 mt-2 w-44 rounded-lg shadow-lg overflow-hidden',
+                headerIsLanding ? 'bg-black/80 text-white' : 'bg-white text-black'
+              ]"
+              role="listbox"
+            >
+              <button
+                v-for="l in languages" :key="'d-'+l"
+                @click="setLang(l)"
+                class="w-full text-left px-3 py-2 text-sm hover:bg-white/10 focus:outline-none"
+                role="option"
+                :aria-selected="currentLang===l"
+              >
+                {{ l }}
+              </button>
+            </div>
+          </div>
+
+          <!-- Shopping cart button in header -->
+          <button
+            :class="[
+              'flex items-center gap-2 px-3 py-2 rounded-full text-sm font-semibold border transition',
+              headerIsLanding
+                ? 'border-white/60 text-white hover:bg-white/10'
+                : 'border-gray-400 text-black hover:bg-black/5',
+              (cart.length === 0 && view==='classes') ? 'opacity-40 cursor-not-allowed' : ''
+            ]"
+            :disabled="cart.length === 0 && view==='classes'"
+            @click="toggleCartHeader"
+          >
+            <i class="fa-solid fa-cart-shopping text-xs"></i>
+            <span v-if="view!=='cart'">Cart ({{ cart.length }})</span>
+            <span v-else>Back to classes</span>
+          </button>
+
+          <a href="#"
+             class="px-3 py-2 rounded-lg text-sm hover:bg-white/10"
+             @click.prevent="goSignup('login')">
+            Log in
+          </a>
+          <a href="#"
+             class="px-4 py-2 rounded-full text-sm font-semibold bg-brandYellow text-black hover:brightness-95"
+             @click.prevent="goSignup()">
+            Sign up
+          </a>
+        </div>
+
+        <!-- Mobile menu toggle -->
+        <button
+          class="md:hidden p-2 rounded"
+          :class="headerIsLanding ? 'bg-black/60 text-white' : 'bg-white/80 text-black'"
+          @click="toggleMobile"
+          aria-label="menu"
+          v-show="view==='landing' || view==='classes'">
+          <span v-if="!mobileOpen">☰</span><span v-else>✕</span>
+        </button>
+      </div>
+
+      <!-- Mobile menu -->
+      <div
+        v-show="mobileOpen && (view==='landing' || view==='classes')"
+        class="md:hidden rounded-lg px-4 py-3 space-y-3 shadow"
+        :class="headerIsLanding ? 'bg-black/80 text-white' : 'bg-white/95 text-black'"
+      >
+        <!-- Language dropdown (mobile) -->
+        <div class="relative" @keydown.esc="langOpenMobile=false">
+          <button
+            @click="langOpenMobile = !langOpenMobile"
+            class="flex items-center justify-between w-full gap-2 px-3 py-2 rounded-lg text-sm border"
+            :class="headerIsLanding ? 'bg-black/70 text-white border-white/30' : 'bg-white text-black border-gray-300'"
+            aria-haspopup="listbox"
+            :aria-expanded="String(langOpenMobile)"
+          >
+            <span>{{ currentLang }}</span>
+            <svg class="w-4 h-4" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M6 9l6 6 6-6"/>
+            </svg>
+          </button>
+          <div
+            v-show="langOpenMobile"
+            class="absolute left-0 mt-2 w-44 rounded-lg shadow-lg overflow-hidden"
+            :class="headerIsLanding ? 'bg-black/90 text-white' : 'bg-white text-black'"
+            role="listbox"
+          >
+            <button
+              v-for="l in languages" :key="'m-'+l"
+              @click="setLangMobile(l)"
+              class="w-full text-left px-3 py-2 text-sm hover:bg-white/10 focus:outline-none"
+              role="option"
+              :aria-selected="currentLang===l"
+            >
+              {{ l }}
+            </button>
+          </div>
+        </div>
+
+        <div class="flex items-center gap-2">
+          <button
+            class="flex-1 flex items-center justify-center gap-1 px-3 py-2 rounded text-sm border"
+            :class="headerIsLanding ? 'border-white/40 text-white' : 'border-gray-400 text-black'"
+            :disabled="cart.length === 0 && view==='classes'"
+            :style="(cart.length === 0 && view==='classes') ? 'opacity:0.4;cursor:not-allowed;' : ''"
+            @click="toggleCartHeader"
+          >
+            <i class="fa-solid fa-cart-shopping text-xs"></i>
+            <span v-if="view!=='cart'">Cart ({{ cart.length }})</span>
+            <span v-else>Back to classes</span>
+          </button>
+          <a href="#"
+             class="px-3 py-2 rounded text-sm hover:bg-white/10"
+             @click.prevent="goSignup('login')">
+            Log in
+          </a>
+          <a href="#"
+             class="px-4 py-2 rounded-full text-sm font-semibold bg-brandYellow text-black"
+             @click.prevent="goSignup()">
+            Sign up
+          </a>
+        </div>
+      </div>
+    </div>
+  </header>
+
+  <!-- ================== VIEW: LANDING ================== -->
+  <div v-if="view==='landing'">
+    <!-- HERO -->
+    <section id="hero" class="relative z-10" style="--bar-h: 64px; min-height: 100svh;">
+      <video class="absolute inset-0 w-full h-full object-cover z-0" autoplay muted loop playsinline preload="auto">
+        <source src="video first page.mp4" type="video/mp4" />
+      </video>
+      <div class="absolute inset-0 bg-black/40 z-10"></div>
+
+      <div class="relative z-20 max-w-7xl mx-auto px-4 pt-28 md:pt-36 pb-28"
+           style="padding-bottom: calc(var(--bar-h) + 1rem);">
+        <div class="max-w-4xl text-white">
+          <h1 class="font-serif text-smooth leading-tight font-extrabold text-5xl md:text-7xl">
+            Because Learning Doesn’t Stop at 3 PM.<br class="hidden md:block">Discover. Learn. Shine.
+          </h1>
+          <div class="mt-8 flex flex-wrap gap-4">
+            <button
+              @click="goSignup()"
+              class="inline-block px-8 py-4 rounded-full bg-brandYellow text-black font-semibold text-lg hover:brightness-95">
+              Get started
+            </button>
+            <button
+              @click="goClasses"
+              class="inline-block px-8 py-4 rounded-full border border-white/60 text-white font-semibold text-lg hover:bg-white/10">
+              Discover your classes
+            </button>
+          </div>
+        </div>
+      </div>
+
+      <!-- Yellow bar -->
+      <div class="absolute inset-x-0 bottom-0 z-30 bg-brandYellow text-black"
+           style="height: var(--bar-h);">
+        <div class="max-w-7xl mx-auto h-full px-4 grid gap-6 md:grid-cols-3 items-center text-sm md:text-base">
+          <div class="flex items-center gap-3">
+            <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <rect x="3" y="10" width="4" height="10" fill="currentColor"></rect>
+              <rect x="10" y="6" width="4" height="14" fill="currentColor"></rect>
+              <rect x="17" y="3" width="4" height="17" fill="currentColor"></rect>
+            </svg>
+            <span class="font-medium">All levels welcome</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <circle cx="8" cy="8" r="3" fill="currentColor"></circle>
+              <circle cx="16" cy="10" r="3" fill="currentColor"></circle>
+              <path d="M2 21c0-3.3 2.7-6 6-6" stroke="currentColor" stroke-width="2"/>
+              <path d="M12 21c0-3.3 2.7-6 6-6" stroke="currentColor" stroke-width="2"/>
+            </svg>
+            <span class="font-medium">Real conversations with native speakers</span>
+          </div>
+          <div class="flex items-center gap-3">
+            <svg class="w-6 h-6" viewBox="0 0 24 24" fill="none" stroke="currentColor">
+              <path d="M12 22s7-6 7-12a7 7 0 10-14 0c0 6 7 12 7 12z" stroke="currentColor" stroke-width="2"></path>
+              <path d="M12 7v4l3 2" stroke="currentColor" stroke-width="2"></path>
+            </svg>
+            <span class="font-medium">Anytime, anywhere, 24/7</span>
+          </div>
+        </div>
+      </div>
+    </section>
+
+    <div style="height: 64px;"></div>
+
+    <!-- GOALS -->
+    <section id="goals" class="bg-sand text-black">
+      <div class="max-w-7xl mx-auto px-4 py-16 md:py-20">
+        <div class="max-w-3xl mx-auto text-center">
+          <h2 class="font-serif text-4xl md:text-5xl font-extrabold text-black">Start with your goals</h2>
+          <p class="mt-4 text-gray-700">
+            We recommend lessons, topics, and activities to help you reach your goals.
+          </p>
+          <button @click="goSignup()" class="inline-block mt-6 px-8 py-4 rounded-full bg-brandYellow text-black font-semibold hover:brightness-95">
+            Start learning
+          </button>
+        </div>
+
+        <div class="mt-12 md:mt-16">
+          <div class="max-w-4xl mx-auto relative rounded-2xl overflow-hidden shadow">
+            <img src="subject.jpg" alt="Subjects" class="w-full h-auto object-cover">
+            <div class="absolute inset-x-0 top-0">
+              <div class="p-4 md:p-6">
+                <button
+                  @click="goClasses"
+                  class="inline-flex items-center gap-2 px-5 py-2.5 rounded-full bg-black/80 text-white text-lg md:text-xl font-semibold hover:bg-black/90"
+                >
+                  Discover your classes
+                  <span aria-hidden="true">➜</span>
+                </button>
+              </div>
+            </div>
+          </div>
+        </div>
+
+      </div>
+    </section>
+  </div>
+
+  <!-- ================== VIEW: CLASSES ================== -->
+  <div v-else-if="view==='classes'" class="bg-sand text-black min-h-screen pt-28 pb-16">
+    <div class="max-w-7xl mx-auto px-4">
+
+      <section class="text-center max-w-3xl mx-auto mb-10">
+        <h1 class="font-serif text-4xl md:text-5xl font-extrabold mb-4">Choose your class!</h1>
+        <p class="text-gray-700 mb-6">
+          Browse our subjects, compare prices and availability, then add your favourite classes to the cart.
+        </p>
+        <button
+          @click="goSignup()"
+          class="px-8 py-3 rounded-full bg-brandYellow text-black font-semibold hover:brightness-95"
+        >
+          Sign up to see all classes
+        </button>
+      </section>
+
+      <section class="bg-white rounded-2xl shadow p-4 md:p-6">
+        <!-- Filters + cart row -->
+        <div class="flex flex-col gap-4 md:flex-row md:items-end md:justify-between mb-6">
+          <!-- Search + sort -->
+          <div class="w-full md:max-w-3xl">
+            <div class="grid gap-4 md:grid-cols-3">
+              <!-- Search -->
+              <div>
+                <label class="block text-xs font-semibold text-gray-600 mb-1 uppercase tracking-wide">
+                  Search
+                </label>
+                <input
+                  type="text"
+                  v-model.trim="searchTerm"
+                  placeholder="Search by subject or location"
+                  class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brandTeal"
+                />
+              </div>
+
+              <!-- Sort by -->
+              <div>
+                <label class="block text-xs font-semibold text-gray-600 mb-1 uppercase tracking-wide">
+                  Sort by
+                </label>
+                <select
+                  v-model="sortBy"
+                  class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brandTeal"
+                >
+                  <option value="subject">Subject</option>
+                  <option value="location">Location</option>
+                  <option value="price">Price</option>
+                  <option value="spaces">Spaces</option>
+                </select>
+              </div>
+
+              <!-- Order -->
+              <div>
+                <label class="block text-xs font-semibold text-gray-600 mb-1 uppercase tracking-wide">
+                  Order
+                </label>
+                <select
+                  v-model="sortDir"
+                  class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm bg-white focus:outline-none focus:ring-2 focus:ring-brandTeal"
+                >
+                  <option value="asc">Ascending</option>
+                  <option value="desc">Descending</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <!-- Shopping cart button (coursework) -->
+          <div class="md:text-right text-sm">
+            <button
+              class="inline-flex items-center gap-2 px-4 py-2 rounded-full font-semibold border border-gray-300 hover:bg-gray-50 transition disabled:bg-gray-200 disabled:text-gray-500 disabled:cursor-not-allowed"
+              :disabled="cart.length === 0"
+              @click="goCart"
+            >
+              <i class="fa-solid fa-cart-shopping text-xs"></i>
+              <span>Shopping cart ({{ cart.length }})</span>
+            </button>
+            <p class="text-[11px] text-gray-500 mt-1">
+              Add at least one class to enable the cart.
+            </p>
+          </div>
+        </div>
+
+        <!-- Loading / error messages from API -->
+        <div v-if="loadingLessons" class="text-xs text-gray-500 mb-4">
+          Loading lessons from server…
+        </div>
+        <div v-else-if="loadError" class="text-xs text-red-600 mb-4">
+          {{ loadError }}
+        </div>
+
+        <!-- Lesson cards -->
+        <div class="grid gap-6 md:grid-cols-2 xl:grid-cols-3">
+          <article
+            v-for="lesson in processedLessons"
+            :key="lesson.id"
+            class="rounded-2xl border border-gray-200 bg-sand/60 p-4 flex flex-col"
+          >
+            <div class="flex items-center gap-3 mb-3">
+              <div class="w-12 h-12 rounded-full bg-brandYellow flex items-center justify-center text-xl">
+                <i :class="lesson.icon"></i>
+              </div>
+              <div class="text-left">
+                <h2 class="font-semibold text-lg">{{ lesson.subject }}</h2>
+                <p class="text-xs text-gray-700 flex items-center gap-1 mt-1">
+                  <i class="fa-solid fa-location-dot text-[11px]"></i>
+                  <span>{{ lesson.location }}</span>
+                </p>
+              </div>
+            </div>
+
+            <p class="text-sm text-gray-800 mb-2">
+              Price:
+              <span class="font-semibold">Rs {{ lesson.price.toFixed(2) }}</span>
+              per session
+            </p>
+
+            <p class="text-sm text-gray-800 mb-4">
+              Spaces left:
+              <span
+                :class="lesson.spaces === 0 ? 'text-red-600 font-semibold' : 'text-emerald-700 font-semibold'"
+              >
+                {{ lesson.spaces }}
+              </span>
+            </p>
+
+            <div class="mt-auto">
+              <button
+                class="w-full py-2.5 rounded-full text-sm font-semibold transition"
+                :class="canAddToCart(lesson)
+                  ? 'bg-black text-white hover:bg-gray-900'
+                  : 'bg-gray-300 text-gray-600 cursor-not-allowed'"
+                :disabled="!canAddToCart(lesson)"
+                @click="addToCart(lesson)"
+              >
+                Add to cart
+              </button>
+            </div>
+          </article>
+        </div>
+      </section>
+    </div>
+  </div>
+
+  <!-- ================== VIEW: CART PAGE ================== -->
+  <div v-else-if="view==='cart'" class="bg-white text-black min-h-screen pt-24 pb-16">
+    <div class="max-w-7xl mx-auto px-4">
+      <h1 class="text-3xl md:text-4xl font-bold mb-2">Shopping Cart</h1>
+      <p class="text-sm text-gray-600 mb-8">
+        {{ totalItems }} course<span v-if="totalItems !== 1">s</span> in cart
+      </p>
+
+      <div class="grid gap-10 lg:grid-cols-[minmax(0,2.4fr)_minmax(260px,1fr)]">
+        <!-- Cart items -->
+        <div>
+          <div v-if="cartItems.length === 0" class="border rounded-xl p-6 text-sm text-gray-700">
+            Your cart is empty. Go back to the lesson list to add some classes.
+            <button class="block mt-3 text-brandTeal font-semibold hover:underline" @click="goClasses">
+              ← Back to classes
+            </button>
+          </div>
+
+          <div v-else class="space-y-4">
+            <div
+              v-for="item in cartItems"
+              :key="item.lesson.id"
+              class="flex flex-col gap-3 md:flex-row md:items-center border border-gray-200 rounded-2xl p-3"
+            >
+              <div class="flex gap-3 items-center md:flex-1">
+                <div class="w-24 h-24 rounded-xl bg-sand flex items-center justify-center">
+                  <i :class="item.lesson.icon + ' text-2xl'"></i>
+                </div>
+                <div>
+                  <h3 class="font-semibold text-base">{{ item.lesson.subject }}</h3>
+                  <p class="text-xs text-gray-600 mt-1 flex items-center gap-1">
+                    <i class="fa-solid fa-location-dot text-[11px]"></i>
+                    <span>{{ item.lesson.location }}</span>
+                  </p>
+                  <p class="text-xs text-gray-500 mt-1">
+                    {{ item.quantity }} lesson<span v-if="item.quantity>1">s</span> in cart
+                  </p>
+                </div>
+              </div>
+
+              <div class="flex items-center justify-between md:flex-col md:items-end md:justify-center gap-2 md:gap-1">
+                <button
+                  class="text-xs text-brandTeal font-semibold hover:underline"
+                  @click="removeFromCart(item.lesson.id)"
+                >
+                  Remove
+                </button>
+                <div class="text-sm font-semibold">
+                  Rs {{ item.lineTotal.toFixed(2) }}
+                </div>
+              </div>
+            </div>
+          </div>
+
+          <!-- You might also like -->
+          <div class="mt-10" v-if="recommendedLessons.length">
+            <h2 class="text-xl font-semibold mb-3">You might also like</h2>
+            <p class="text-sm text-gray-600 mb-3">
+              More subjects you can explore alongside your current selection.
+            </p>
+            <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <article
+                v-for="lesson in recommendedLessons"
+                :key="'rec-'+lesson.id"
+                class="border border-gray-200 rounded-xl p-3 bg-sand"
+              >
+                <div class="flex items-center gap-3 mb-2">
+                  <div class="w-10 h-10 rounded-full bg-brandYellow flex items-center justify-center text-lg">
+                    <i :class="lesson.icon"></i>
+                  </div>
+                  <div>
+                    <h3 class="text-sm font-semibold">{{ lesson.subject }}</h3>
+                    <p class="text-[11px] text-gray-600">{{ lesson.location }}</p>
+                  </div>
+                </div>
+                <p class="text-xs text-gray-700">
+                  From Rs {{ lesson.price.toFixed(2) }} •
+                  <span :class="lesson.spaces>0 ? 'text-emerald-700' : 'text-red-600'">
+                    {{ lesson.spaces }} spaces left
+                  </span>
+                </p>
+                <button
+                  class="mt-2 w-full rounded-full text-xs font-semibold py-1.5"
+                  :class="canAddToCart(lesson)
+                    ? 'bg-black text-white hover:bg-gray-900'
+                    : 'bg-gray-300 text-gray-600 cursor-not-allowed'"
+                  :disabled="!canAddToCart(lesson)"
+                  @click="addToCart(lesson)"
+                >
+                  Add to cart
+                </button>
+              </article>
+            </div>
+          </div>
+        </div>
+
+        <!-- Order summary -->
+        <aside class="border border-gray-200 rounded-2xl p-4 h-max">
+          <h2 class="text-lg font-semibold mb-4">Total</h2>
+          <div class="flex justify-between text-sm text-gray-700 mb-1">
+            <span>Courses in cart</span>
+            <span>{{ totalItems }}</span>
+          </div>
+          <div class="flex justify-between text-base font-semibold mb-4">
+            <span>Rs {{ cartTotal.toFixed(2) }}</span>
+          </div>
+
+          <button
+            class="w-full py-2.5 rounded-full text-sm font-semibold bg-brandTeal text-white hover:bg-brandTeal/90 disabled:bg-gray-300 disabled:text-gray-600"
+            :disabled="cartItems.length===0"
+            @click="goCheckout"
+          >
+            Proceed to Checkout
+          </button>
+
+          <button
+            class="mt-3 w-full text-xs text-brandTeal hover:underline"
+            @click="goClasses"
+          >
+            ← Back to classes
+          </button>
+        </aside>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================== VIEW: CHECKOUT PAGE ================== -->
+  <div v-else-if="view==='checkout'" class="bg-white text-black min-h-screen pt-24 pb-16">
+    <div class="max-w-7xl mx-auto px-4">
+      <div class="flex items-center justify-between mb-6">
+        <h1 class="text-3xl md:text-4xl font-bold">Checkout</h1>
+        <button class="text-sm text-brandTeal hover:underline" @click="goCart">
+          ← Back to cart
+        </button>
+      </div>
+
+      <div class="grid gap-10 lg:grid-cols-[minmax(0,2.1fr)_minmax(260px,1fr)]">
+        <!-- Left: form -->
+        <section>
+          <h2 class="text-lg font-semibold mb-4">1. Your details</h2>
+          <form @submit.prevent="checkout" class="space-y-4 border border-gray-200 rounded-2xl p-4">
+            <div>
+              <label class="block text-xs font-semibold text-gray-600 mb-1 uppercase tracking-wide">
+                Name
+              </label>
+              <input
+                type="text"
+                v-model.trim="customerName"
+                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-brandTeal"
+                placeholder="Your full name"
+              />
+              <p v-if="customerName && !nameIsValid" class="text-xs text-red-600 mt-1">
+                Name must contain letters and spaces only.
+              </p>
+            </div>
+
+            <div>
+              <label class="block text-xs font-semibold text-gray-600 mb-1 uppercase tracking-wide">
+                Phone
+              </label>
+              <input
+                type="text"
+                v-model.trim="customerPhone"
+                class="w-full rounded-lg border border-gray-300 px-3 py-2 text-sm focus:outline-none focus:ring-brandTeal"
+                placeholder="e.g. 57901234"
+              />
+              <p v-if="customerPhone && !phoneIsValid" class="text-xs text-red-600 mt-1">
+                Phone must contain numbers only.
+              </p>
+            </div>
+
+            <button
+              type="submit"
+              class="w-full py-2.5 rounded-full text-sm font-semibold transition"
+              :class="canCheckout
+                ? 'bg-brandTeal text-white hover:bg-brandTeal/90'
+                : 'bg-gray-300 text-gray-600 cursor-not-allowed'"
+              :disabled="!canCheckout"
+            >
+              Complete Enrollment
+            </button>
+
+            <p v-if="checkoutMessage" class="text-xs text-emerald-700 mt-1">
+              {{ checkoutMessage }}
+            </p>
+
+            <p class="text-[11px] text-gray-500">
+              Checkout button is always visible but only enabled when a valid
+              Name and Phone are provided (letters only / numbers only).
+            </p>
+          </form>
+
+          <!-- Order details -->
+          <div class="mt-8">
+            <h2 class="text-lg font-semibold mb-3">Order details ({{ totalItems }} course<span v-if="totalItems!==1">s</span>)</h2>
+            <div class="space-y-3">
+              <div
+                v-for="item in cartItems"
+                :key="'co-'+item.lesson.id"
+                class="flex items-center gap-3 border border-gray-200 rounded-xl p-3"
+              >
+                <div class="w-16 h-16 rounded-lg bg-sand flex items-center justify-center">
+                  <i :class="item.lesson.icon + ' text-xl'"></i>
+                </div>
+                <div class="flex-1">
+                  <p class="text-sm font-semibold">{{ item.lesson.subject }}</p>
+                  <p class="text-xs text-gray-600">{{ item.lesson.location }}</p>
+                </div>
+                <p class="text-sm font-semibold">
+                  Rs {{ item.lineTotal.toFixed(2) }}
+                </p>
+              </div>
+            </div>
+          </div>
+
+          <!-- You might also like on checkout -->
+          <div class="mt-10" v-if="recommendedLessons.length">
+            <h2 class="text-xl font-semibold mb-3">You might also like</h2>
+            <p class="text-sm text-gray-600 mb-3">
+              Add another subject now and it will be included in this order.
+            </p>
+            <div class="grid gap-4 sm:grid-cols-2 lg:grid-cols-3">
+              <article
+                v-for="lesson in recommendedLessons"
+                :key="'co-rec-'+lesson.id"
+                class="border border-gray-200 rounded-xl p-3 bg-sand"
+              >
+                <div class="flex items-center gap-3 mb-2">
+                  <div class="w-10 h-10 rounded-full bg-brandYellow flex items-center justify-center text-lg">
+                    <i :class="lesson.icon"></i>
+                  </div>
+                  <div>
+                    <h3 class="text-sm font-semibold">{{ lesson.subject }}</h3>
+                    <p class="text-[11px] text-gray-600">{{ lesson.location }}</p>
+                  </div>
+                </div>
+                <p class="text-xs text-gray-700">
+                  Rs {{ lesson.price.toFixed(2) }} •
+                  <span :class="lesson.spaces>0 ? 'text-emerald-700' : 'text-red-600'">
+                    {{ lesson.spaces }} spaces left
+                  </span>
+                </p>
+                <button
+                  class="mt-2 w-full rounded-full text-xs font-semibold py-1.5"
+                  :class="canAddToCart(lesson)
+                    ? 'bg-black text-white hover:bg-gray-900'
+                    : 'bg-gray-300 text-gray-600 cursor-not-allowed'"
+                  :disabled="!canAddToCart(lesson)"
+                  @click="addToCart(lesson)"
+                >
+                  Add to cart
+                </button>
+              </article>
+            </div>
+          </div>
+        </section>
+
+        <!-- Right: summary -->
+        <aside class="border border-gray-200 rounded-2xl p-4 h-max">
+          <h2 class="text-lg font-semibold mb-4">Order summary</h2>
+          <div class="flex justify-between text-sm text-gray-700">
+            <span>Courses</span>
+            <span>{{ totalItems }}</span>
+          </div>
+          <div class="flex justify-between text-base font-semibold mt-2">
+            <span>Total</span>
+            <span>Rs {{ cartTotal.toFixed(2) }}</span>
+          </div>
+
+          <hr class="my-4" />
+
+          <button
+            class="w-full py-2.5 rounded-full text-sm font-semibold mb-3"
+            :class="canCheckout
+              ? 'bg-brandTeal text-white hover:bg-brandTeal/90'
+              : 'bg-gray-300 text-gray-600 cursor-not-allowed'"
+            :disabled="!canCheckout"
+            @click="checkout"
+          >
+            Complete Enrollment
+          </button>
+
+          <button
+            class="w-full text-xs text-brandTeal hover:underline"
+            @click="goCart"
+          >
+            ← Back to cart
+          </button>
+        </aside>
+      </div>
+    </div>
+  </div>
+
+  <!-- ================== VIEW: SIGNUP / LOGIN ================== -->
+  <div v-else-if="view==='signup'" class="bg-white text-black min-h-screen">
+    <div class="max-w-7xl mx-auto px-4 py-4 flex justify-end">
+      <button class="text-brandTeal hover:underline" @click="mode='login'; resetForm()">Log in</button>
+    </div>
+
+    <div class="max-w-7xl mx-auto px-4 pb-16">
+      <div class="grid lg:grid-cols-2 gap-10 items-stretch">
+        <!-- Illustration -->
+        <div class="hidden lg:block rounded-2xl overflow-hidden bg-sand">
+          <img src="sign up pic.jpg" alt="Kids learning illustration" class="w-full h-full object-cover">
+        </div>
+
+        <!-- Form -->
+        <div class="flex items-center">
+          <div class="w-full max-w-xl mx-auto">
+            <h1 class="text-2xl md:text-3xl font-semibold mb-6">Welcome, parent!</h1>
+
+            <p class="text-sm text-gray-600 mb-4" v-if="mode==='signup'">Sign up with your email address:</p>
+            <p class="text-sm text-gray-600 mb-4" v-else>Log in with your email address:</p>
+
+            <form
+              :key="'auth-'+formReset"
+              @submit.prevent="onSubmit"
+              class="space-y-4"
+              autocomplete="off"
+            >
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1" for="email">Email</label>
+                <input
+                  id="email"
+                  v-model.trim="auth.email"
+                  type="email"
+                  autocomplete="off"
+                  autocapitalize="none"
+                  spellcheck="false"
+                  inputmode="email"
+                  class="w-full rounded-md border border-gray-300 px-3 py-2 focus:outline-none focus:ring-2 focus:ring-brandTeal"
+                  placeholder="you@example.com"
+                  required
+                />
+              </div>
+
+              <div>
+                <label class="block text-sm font-medium text-gray-700 mb-1" for="password">Password</label>
+                <div class="relative">
+                  <input
+                    :type="showPassword ? 'text' : 'password'"
+                    id="password"
+                    v-model="auth.password"
+                    autocomplete="new-password"
+                    minlength="6"
+                    class="w-full rounded-md border border-gray-300 px-3 py-2 pr-10 focus:outline-none focus:ring-2 focus:ring-brandTeal"
+                    placeholder="••••••••"
+                    required
+                  />
+                  <button
+                    type="button"
+                    class="absolute inset-y-0 right-0 px-3 text-gray-500 hover:text-gray-700"
+                    @click="showPassword = !showPassword"
+                  >
+                    <span v-if="!showPassword">👁️</span>
+                    <span v-else>🙈</span>
+                  </button>
+                </div>
+              </div>
+
+              <button
+                type="submit"
+                class="w-full rounded-md bg-brandTeal text-white font-semibold py-3 hover:opacity-95 transition"
+              >
+                {{ mode==='signup' ? 'CREATE ACCOUNT' : 'LOG IN' }}
+              </button>
+            </form>
+
+            <p class="mt-4 text-sm text-gray-700">
+              <span v-if="mode==='signup'">Already have an account?</span>
+              <span v-else>Need an account?</span>
+              <button class="text-brandTeal font-medium hover:underline ml-1" @click="toggleMode">
+                {{ mode==='signup' ? 'Log in' : 'Create one' }}
+              </button>
+            </p>
+
+            <button class="mt-6 text-sm text-gray-600 hover:underline" @click="goHome">
+              ← Back to home
+            </button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Fallback -->
+  <div v-else class="min-h-screen flex items-center justify-center">Loading…</div>
+
+</div>
+
+<!-- Lessons data (fallback) -->
+<script src="products.js"></script>
+
+<script>
+  new Vue({
+    el: '#app',
+    data: {
+      view: 'landing',       // 'landing' | 'classes' | 'cart' | 'checkout' | 'signup'
+      mode: 'signup',
+
+      mobileOpen: false,
+      langOpen: false,
+      langOpenMobile: false,
+      currentLang: 'English',
+      languages: ['English', 'French', 'Italian', 'Spanish'],
+
+      auth: { email: '', password: '' },
+      showPassword: false,
+      formReset: 0,
+
+      // start with fallback products list (from products.js) – will be replaced by API data
+      lessons: (typeof products !== 'undefined') ? products.slice() : [],
+      searchTerm: '',
+      sortBy: 'subject',
+      sortDir: 'asc',
+      cart: [],
+
+      customerName: '',
+      customerPhone: '',
+      checkoutMessage: '',
+
+      // API loading state
+      loadingLessons: false,
+      loadError: ''
+    },
+    computed: {
+      // header styling helpers
+      headerIsLanding () {
+        return this.view === 'landing';
+      },
+      headerTextClass () {
+        return this.headerIsLanding ? 'text-white' : 'text-black';
+      },
+
+      processedLessons () {
+        let list = this.lessons.slice();
+        if (this.searchTerm) {
+          const t = this.searchTerm.toLowerCase();
+          list = list.filter(l =>
+            l.subject.toLowerCase().includes(t) ||
+            l.location.toLowerCase().includes(t)
+          );
+        }
+        const dir = this.sortDir === 'asc' ? 1 : -1;
+        const attr = this.sortBy;
+        list.sort((a, b) => {
+          let va = a[attr], vb = b[attr];
+          if (typeof va === 'string') { va = va.toLowerCase(); vb = vb.toLowerCase(); }
+          if (va < vb) return -1 * dir;
+          if (va > vb) return 1 * dir;
+          return 0;
+        });
+        return list;
+      },
+      cartItems () {
+        const counts = {};
+        this.cart.forEach(id => {
+          counts[id] = (counts[id] || 0) + 1;
+        });
+        return Object.keys(counts).map(id => {
+          const lesson = this.lessons.find(l => l.id === Number(id));
+          const qty = counts[id];
+          return lesson ? {
+            lesson,
+            quantity: qty,
+            lineTotal: qty * lesson.price
+          } : null;
+        }).filter(Boolean);
+      },
+      totalItems () {
+        return this.cart.length;
+      },
+      cartTotal () {
+        return this.cartItems.reduce((sum, item) => sum + item.lineTotal, 0);
+      },
+      recommendedLessons () {
+        const inCartIds = new Set(this.cart);
+        return this.lessons.filter(l => !inCartIds.has(l.id)).slice(0, 6);
+      },
+      nameIsValid () {
+        if (!this.customerName) return false;
+        return /^[A-Za-z\s]+$/.test(this.customerName);
+      },
+      phoneIsValid () {
+        if (!this.customerPhone) return false;
+        return /^[0-9]+$/.test(this.customerPhone);
+      },
+      canCheckout () {
+        return this.nameIsValid && this.phoneIsValid && this.cartItems.length>0;
+      }
+    },
+    methods: {
+      // navigation
+      goHome () { this.view = 'landing'; this.closeAllMenus(); window.scrollTo(0,0); },
+      goClasses () { this.view = 'classes'; this.closeAllMenus(); window.scrollTo(0,0); },
+      goCart () { this.view = 'cart'; this.closeAllMenus(); window.scrollTo(0,0); },
+      goCheckout () { this.view = 'checkout'; this.closeAllMenus(); window.scrollTo(0,0); },
+      goSignup (forceMode) {
+        if (forceMode) this.mode = forceMode;
+        this.view = 'signup';
+        this.closeAllMenus();
+        this.resetForm();
+        window.scrollTo(0,0);
+      },
+
+      toggleCartHeader () {
+        if (this.view === 'cart') {
+          this.goClasses();
+        } else if (this.view === 'classes' && this.cart.length > 0) {
+          this.goCart();
+        }
+      },
+
+      // menus
+      toggleMobile () { this.mobileOpen = !this.mobileOpen; if (!this.mobileOpen) this.langOpenMobile=false; },
+      setLang (l) { this.currentLang = l; this.langOpen=false; },
+      setLangMobile (l) { this.currentLang=l; this.langOpenMobile=false; },
+      closeAllMenus () { this.mobileOpen=false; this.langOpen=false; this.langOpenMobile=false; },
+
+      // auth
+      toggleMode () { this.mode = this.mode === 'signup' ? 'login' : 'signup'; this.resetForm(); },
+      resetForm () { this.auth = { email:'', password:'' }; this.showPassword=false; this.formReset++; },
+      onSubmit () {
+        if (this.auth.email.length<=3 || this.auth.password.length<6) {
+          alert('Please enter a valid email and a password of at least 6 characters.');
+          return;
+        }
+        const msg = this.mode==='signup'
+          ? `Account created for ${this.auth.email} 🎉`
+          : `Logged in as ${this.auth.email} ✅`;
+        alert(msg);
+        this.resetForm();
+      },
+
+      // lessons + cart
+      canAddToCart (lesson) { return lesson.spaces > 0; },
+      addToCart (lesson) {
+        if (!this.canAddToCart(lesson)) return;
+        this.cart.push(lesson.id);
+        lesson.spaces -= 1;
+      },
+
+      // remove only ONE instance
+      removeFromCart (lessonId) {
+        const idx = this.cart.indexOf(lessonId);
+        if (idx !== -1) {
+          this.cart.splice(idx, 1);
+          const lesson = this.lessons.find(l => l.id === lessonId);
+          if (lesson) lesson.spaces += 1;
+        }
+      },
+
+      // checkout
+      checkout () {
+        if (!this.canCheckout) return;
+        const items = this.totalItems;
+        const total = this.cartTotal.toFixed(2);
+        this.checkoutMessage =
+          `Thank you, ${this.customerName}! Your order for ${items} ` +
+          `class${items===1?'':'es'} (Rs ${total}) has been submitted.`;
+        alert(this.checkoutMessage);
+        this.cart = []; // spaces stay reduced (booked)
+      },
+
+      // NEW: load lessons from your Node/MongoDB backend
+      async loadLessonsFromApi () {
+        console.log("📡 loadLessonsFromApi() is running…");
+        this.loadingLessons = true;
+        this.loadError = '';
+
+
+        // icons to attach based on subject/title from DB
+        const iconMap = {
+          'English': 'fa-solid fa-book-open',
+          'French': 'fa-solid fa-language',
+          'Mathematics': 'fa-solid fa-square-root-variable',
+          'Additional Mathematics': 'fa-solid fa-calculator',
+          'Physics': 'fa-solid fa-atom',
+          'Biology': 'fa-solid fa-dna',
+          'Chemistry': 'fa-solid fa-flask',
+          'Computer Science': 'fa-solid fa-laptop-code',
+          'Art & Design': 'fa-solid fa-palette',
+          'Business Management': 'fa-solid fa-briefcase'
+        };
+
+        try {
+          const res = await fetch('http://127.0.0.1:3000/search');
+
+          if (!res.ok) {
+            throw new Error('HTTP ' + res.status);
+          }
+          const data = await res.json();
+
+          // Map MongoDB documents to the shape used in the front-end
+          this.lessons = data.map((doc, index) => {
+            const title = doc.title || doc.subject || 'Untitled';
+            return {
+              id: index + 1,
+              subject: title,
+              location: doc.location || 'TBA',
+              price: Number(doc.price) || 0,
+              spaces: Number(doc.spaces ?? 0),
+              icon: iconMap[title] || 'fa-solid fa-book'
+            };
+          });
+        } catch (err) {
+          console.error('Failed to load lessons from API', err);
+          this.loadError =
+            'Could not load lessons from the server. Showing the built-in sample list instead.';
+          // keep whatever is already in this.lessons (fallback from products.js)
+        } finally {
+          this.loadingLessons = false;
+        }
+      }
+    },
+    mounted () {
+      // close language dropdown when clicking elsewhere
+      document.addEventListener('click', (e) => {
+        const inToggle = e.target.closest && e.target.closest('[aria-haspopup="listbox"]');
+        if (!inToggle) this.closeAllMenus();
+      });
+
+      // Load real lessons from your backend on page load
+      this.loadLessonsFromApi();
+    }
+  });
+</script>
+
+</body>
+</html>
