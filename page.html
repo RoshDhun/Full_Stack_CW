@@ -873,6 +873,7 @@
       loadingLessons: false,
       loadError: ''
     },
+
     computed: {
       // header styling helpers
       headerIsLanding () {
@@ -882,17 +883,25 @@
         return this.headerIsLanding ? 'text-white' : 'text-black';
       },
 
+      // IMPORTANT:
+      // - If backend search works (loadError === ''), lessons are already filtered
+      //   by the backend, so we only sort here.
+      // - If backend fails (loadError !== ''), we fall back to old front-end filtering.
       processedLessons () {
         let list = this.lessons.slice();
-        if (this.searchTerm) {
+
+        // Fallback local filtering ONLY if backend is not available
+        if (this.loadError && this.searchTerm) {
           const t = this.searchTerm.toLowerCase();
           list = list.filter(l =>
             l.subject.toLowerCase().includes(t) ||
             l.location.toLowerCase().includes(t)
           );
         }
+
         const dir = this.sortDir === 'asc' ? 1 : -1;
         const attr = this.sortBy;
+
         list.sort((a, b) => {
           let va = a[attr], vb = b[attr];
           if (typeof va === 'string') { va = va.toLowerCase(); vb = vb.toLowerCase(); }
@@ -900,8 +909,10 @@
           if (va > vb) return 1 * dir;
           return 0;
         });
+
         return list;
       },
+
       cartItems () {
         const counts = {};
         this.cart.forEach(id => {
@@ -917,28 +928,46 @@
           } : null;
         }).filter(Boolean);
       },
+
       totalItems () {
         return this.cart.length;
       },
+
       cartTotal () {
         return this.cartItems.reduce((sum, item) => sum + item.lineTotal, 0);
       },
+
       recommendedLessons () {
         const inCartIds = new Set(this.cart);
         return this.lessons.filter(l => !inCartIds.has(l.id)).slice(0, 6);
       },
+
       nameIsValid () {
         if (!this.customerName) return false;
         return /^[A-Za-z\s]+$/.test(this.customerName);
       },
+
       phoneIsValid () {
         if (!this.customerPhone) return false;
         return /^[0-9]+$/.test(this.customerPhone);
       },
+
       canCheckout () {
-        return this.nameIsValid && this.phoneIsValid && this.cartItems.length>0;
+        return this.nameIsValid && this.phoneIsValid && this.cartItems.length > 0;
       }
     },
+
+    // 🔎 SEARCH-AS-YOU-TYPE: whenever searchTerm changes, we call the backend /search API
+    watch: {
+      async searchTerm (newVal) {
+        // if backend is working, use it for full-text search
+        if (!this.loadError) {
+          await this.loadLessonsFromApi(newVal);
+        }
+        // if backend failed, local fallback filtering happens in processedLessons()
+      }
+    },
+
     methods: {
       // navigation
       goHome () { this.view = 'landing'; this.closeAllMenus(); window.scrollTo(0,0); },
@@ -1012,12 +1041,13 @@
         this.cart = []; // spaces stay reduced (booked)
       },
 
-      // NEW: load lessons from your Node/MongoDB backend
-      async loadLessonsFromApi () {
-        console.log("📡 loadLessonsFromApi() is running…");
+      // 🔁 Core helper: load lessons from your Node/MongoDB backend
+      //    If query is empty → get ALL lessons
+      //    If query has value → backend will do full-text search
+      async loadLessonsFromApi (query = '') {
+        console.log('📡 loadLessonsFromApi() query =', query);
         this.loadingLessons = true;
         this.loadError = '';
-
 
         // icons to attach based on subject/title from DB
         const iconMap = {
@@ -1034,7 +1064,13 @@
         };
 
         try {
-          const res = await fetch('http://127.0.0.1:3000/search');
+          const trimmed = (query || '').trim();
+          const baseUrl = 'http://127.0.0.1:3000/search';
+          const url = trimmed
+            ? `${baseUrl}?q=${encodeURIComponent(trimmed)}`
+            : baseUrl;
+
+          const res = await fetch(url);
 
           if (!res.ok) {
             throw new Error('HTTP ' + res.status);
@@ -1053,16 +1089,21 @@
               icon: iconMap[title] || 'fa-solid fa-book'
             };
           });
+
+          // clear any previous error, because backend is now working
+          this.loadError = '';
         } catch (err) {
           console.error('Failed to load lessons from API', err);
+          // set error so processedLessons switches to local filtering mode
           this.loadError =
             'Could not load lessons from the server. Showing the built-in sample list instead.';
-          // keep whatever is already in this.lessons (fallback from products.js)
+          // keep current this.lessons (fallback from products.js)
         } finally {
           this.loadingLessons = false;
         }
       }
     },
+
     mounted () {
       // close language dropdown when clicking elsewhere
       document.addEventListener('click', (e) => {
@@ -1070,8 +1111,8 @@
         if (!inToggle) this.closeAllMenus();
       });
 
-      // Load real lessons from your backend on page load
-      this.loadLessonsFromApi();
+      // On first load, fetch ALL lessons from backend
+      this.loadLessonsFromApi('');
     }
   });
 </script>
