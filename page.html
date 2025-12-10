@@ -1029,21 +1029,94 @@
         }
       },
 
-      // checkout
-      checkout () {
+      // === CHECKOUT: POST /orders + PUT /lessons/:id ===
+      async checkout () {
         if (!this.canCheckout) return;
-        const items = this.totalItems;
-        const total = this.cartTotal.toFixed(2);
-        this.checkoutMessage =
-          `Thank you, ${this.customerName}! Your order for ${items} ` +
-          `class${items===1?'':'es'} (Rs ${total}) has been submitted.`;
-        alert(this.checkoutMessage);
-        this.cart = []; // spaces stay reduced (booked)
+
+        // Build order payload expected by backend
+        const orderPayload = {
+          name: this.customerName,
+          phone: this.customerPhone,
+          items: this.cartItems.map(item => ({
+            lessonId: item.lesson.id,
+            spaces: item.quantity
+          }))
+        };
+
+        try {
+          // POST /orders  (front-end requirement B)
+          const res = await fetch('http://localhost:3000/orders', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify(orderPayload)
+          });
+
+          if (!res.ok) {
+            const errJson = await res.json().catch(() => ({}));
+            const msg = errJson.error || `Order could not be saved (HTTP ${res.status}).`;
+            alert(msg);
+            return;
+          }
+
+          const data = await res.json();
+          console.log('✅ Order saved:', data);
+
+          // PUT /lessons/:id to sync spaces (front-end requirement C)
+          await this.syncSpacesWithServer();
+
+          const items = this.totalItems;
+          const total = this.cartTotal.toFixed(2);
+          this.checkoutMessage =
+            `Thank you, ${this.customerName}! Your order for ${items} ` +
+            `class${items===1?'':'es'} (Rs ${total}) has been submitted.`;
+          if (data.orderId) {
+            this.checkoutMessage += ` Order ID: ${data.orderId}.`;
+          }
+
+          alert(this.checkoutMessage);
+
+          // Clear cart & form
+          this.cart = [];
+          this.customerName = '';
+          this.customerPhone = '';
+
+          // Refresh lessons from server so UI shows updated spaces
+          await this.loadLessonsFromApi('');
+
+        } catch (err) {
+          console.error('Checkout failed:', err);
+          alert('There was a problem saving your order. Please try again.');
+        }
+      },
+
+      // PUT /lessons/:id for each lesson in the order
+      async syncSpacesWithServer () {
+        for (const item of this.cartItems) {
+          const lessonId = item.lesson.id;
+          const newSpaces = item.lesson.spaces; // already reduced on front-end
+
+          try {
+            const res = await fetch(`http://localhost:3000/lessons/${lessonId}`, {
+              method: 'PUT',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify({ spaces: newSpaces })
+            });
+
+            if (!res.ok) {
+              console.warn(`Failed to update spaces for lesson ${lessonId} (HTTP ${res.status})`);
+            } else {
+              const updated = await res.json().catch(() => ({}));
+              console.log('🔁 Spaces updated via PUT for lesson', lessonId, updated);
+            }
+          } catch (err) {
+            console.error(`Error calling PUT /lessons/${lessonId}:`, err);
+          }
+        }
       },
 
       // 🔁 Core helper: load lessons from your Node/MongoDB backend
-      //    If query is empty → get ALL lessons
-      //    If query has value → backend will do full-text search
+      //    If query is empty → GET /lessons (all lessons)
+      //    If query has value → GET /search?q=... (server-side search)
       async loadLessonsFromApi (query = '') {
         console.log('📡 loadLessonsFromApi() query =', query);
         this.loadingLessons = true;
@@ -1065,10 +1138,14 @@
 
         try {
           const trimmed = (query || '').trim();
-          const baseUrl = 'http://127.0.0.1:3000/search';
+          const lessonsUrl = 'http://localhost:3000/lessons';
+          const searchUrl  = 'http://localhost:3000/search';
+
+          // GET /lessons  (front-end requirement A)
+          // or GET /search?q=... for search
           const url = trimmed
-            ? `${baseUrl}?q=${encodeURIComponent(trimmed)}`
-            : baseUrl;
+            ? `${searchUrl}?q=${encodeURIComponent(trimmed)}`
+            : lessonsUrl;
 
           const res = await fetch(url);
 
@@ -1080,8 +1157,13 @@
           // Map MongoDB documents to the shape used in the front-end
           this.lessons = data.map((doc, index) => {
             const title = doc.title || doc.subject || 'Untitled';
+            const numericId =
+              typeof doc.id === 'number'
+                ? doc.id
+                : (index + 1);
+
             return {
-              id: index + 1,
+              id: numericId,
               subject: title,
               location: doc.location || 'TBA',
               price: Number(doc.price) || 0,
@@ -1111,7 +1193,7 @@
         if (!inToggle) this.closeAllMenus();
       });
 
-      // On first load, fetch ALL lessons from backend
+      // On first load, fetch ALL lessons from backend (GET /lessons)
       this.loadLessonsFromApi('');
     }
   });
