@@ -312,6 +312,7 @@
         <p class="text-gray-700 mb-6">
           Browse our subjects, compare prices and availability, then add your favourite classes to the cart.
         </p>
+        <!-- This button is mostly decorative now because user is already authenticated -->
         <button
           @click="goSignup()"
           class="px-8 py-3 rounded-full bg-brandYellow text-black font-semibold hover:brightness-95"
@@ -810,10 +811,18 @@
 
               <button
                 type="submit"
-                class="w-full rounded-md bg-brandTeal text-white font-semibold py-3 hover:opacity-95 transition"
+                class="w-full rounded-md bg-brandTeal text-white font-semibold py-3 hover:opacity-95 transition disabled:opacity-60"
+                :disabled="authLoading"
               >
-                {{ mode==='signup' ? 'CREATE ACCOUNT' : 'LOG IN' }}
+                {{ authLoading ? 'Please wait…' : (mode==='signup' ? 'CREATE ACCOUNT' : 'LOG IN') }}
               </button>
+
+              <p v-if="authError" class="text-xs text-red-600 mt-1">
+                {{ authError }}
+              </p>
+              <p v-if="authLoading" class="text-xs text-gray-500 mt-1">
+                Checking your details with the server…
+              </p>
             </form>
 
             <p class="mt-4 text-sm text-gray-700">
@@ -854,9 +863,14 @@
       currentLang: 'English',
       languages: ['English', 'French', 'Italian', 'Spanish'],
 
+      // auth state
       auth: { email: '', password: '' },
       showPassword: false,
       formReset: 0,
+      isAuthenticated: false,
+      currentUser: null,
+      authLoading: false,
+      authError: '',
 
       // start with fallback products list (from products.js) – will be replaced by API data
       lessons: (typeof products !== 'undefined') ? products.slice() : [],
@@ -970,10 +984,40 @@
 
     methods: {
       // navigation
-      goHome () { this.view = 'landing'; this.closeAllMenus(); window.scrollTo(0,0); },
-      goClasses () { this.view = 'classes'; this.closeAllMenus(); window.scrollTo(0,0); },
-      goCart () { this.view = 'cart'; this.closeAllMenus(); window.scrollTo(0,0); },
-      goCheckout () { this.view = 'checkout'; this.closeAllMenus(); window.scrollTo(0,0); },
+      goHome () {
+        this.view = 'landing';
+        this.closeAllMenus();
+        window.scrollTo(0,0);
+      },
+
+      // 🔐 gate classes behind auth
+      goClasses () {
+        if (!this.isAuthenticated) {
+          // not logged in → send to signup first
+          this.view = 'signup';
+          this.mode = 'signup';
+          this.closeAllMenus();
+          this.resetForm();
+          window.scrollTo(0,0);
+          return;
+        }
+        this.view = 'classes';
+        this.closeAllMenus();
+        window.scrollTo(0,0);
+      },
+
+      goCart () {
+        this.view = 'cart';
+        this.closeAllMenus();
+        window.scrollTo(0,0);
+      },
+
+      goCheckout () {
+        this.view = 'checkout';
+        this.closeAllMenus();
+        window.scrollTo(0,0);
+      },
+
       goSignup (forceMode) {
         if (forceMode) this.mode = forceMode;
         this.view = 'signup';
@@ -987,6 +1031,13 @@
           this.goClasses();
         } else if (this.view === 'classes' && this.cart.length > 0) {
           this.goCart();
+        } else if (this.view === 'landing') {
+          // from landing, cart button should still respect auth
+          if (!this.isAuthenticated) {
+            this.goSignup('login');
+          } else if (this.cart.length > 0) {
+            this.goCart();
+          }
         }
       },
 
@@ -997,18 +1048,76 @@
       closeAllMenus () { this.mobileOpen=false; this.langOpen=false; this.langOpenMobile=false; },
 
       // auth
-      toggleMode () { this.mode = this.mode === 'signup' ? 'login' : 'signup'; this.resetForm(); },
-      resetForm () { this.auth = { email:'', password:'' }; this.showPassword=false; this.formReset++; },
-      onSubmit () {
-        if (this.auth.email.length<=3 || this.auth.password.length<6) {
-          alert('Please enter a valid email and a password of at least 6 characters.');
+      toggleMode () {
+        this.mode = this.mode === 'signup' ? 'login' : 'signup';
+        this.resetForm();
+      },
+      resetForm () {
+        this.auth = { email:'', password:'' };
+        this.showPassword=false;
+        this.authError = '';
+        this.authLoading = false;
+        this.formReset++;
+      },
+
+      // 🔐 submit signup / login to backend
+      async onSubmit () {
+        if (this.auth.email.length <= 3 || this.auth.password.length < 6) {
+          this.authError = 'Please enter a valid email and a password of at least 6 characters.';
           return;
         }
-        const msg = this.mode==='signup'
-          ? `Account created for ${this.auth.email} 🎉`
-          : `Logged in as ${this.auth.email} ✅`;
-        alert(msg);
-        this.resetForm();
+
+        this.authLoading = true;
+        this.authError = '';
+
+        const endpoint = this.mode === 'signup'
+          ? 'http://localhost:3000/users/signup'
+          : 'http://localhost:3000/users/login';
+
+        try {
+          const res = await fetch(endpoint, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({
+              email: this.auth.email,
+              password: this.auth.password
+            })
+          });
+
+          if (!res.ok) {
+            const errJson = await res.json().catch(() => ({}));
+            this.authError = errJson.error || `Unable to ${this.mode === 'signup' ? 'create account' : 'log in'} (HTTP ${res.status}).`;
+            return;
+          }
+
+          const data = await res.json().catch(() => ({}));
+
+          // Mark as authenticated
+          this.isAuthenticated = true;
+          this.currentUser = {
+            email: this.auth.email,
+            id: data.userId || null
+          };
+
+          // Save to localStorage so refresh keeps user logged in
+          try {
+            localStorage.setItem('fs_user', JSON.stringify(this.currentUser));
+          } catch (e) {
+            console.warn('Could not persist user in localStorage:', e);
+          }
+
+          // After successful signup/login → go to classes
+          this.resetForm();
+          this.view = 'classes';
+          this.closeAllMenus();
+          window.scrollTo(0,0);
+
+        } catch (err) {
+          console.error('Auth request failed:', err);
+          this.authError = 'There was a problem contacting the server. Please try again.';
+        } finally {
+          this.authLoading = false;
+        }
       },
 
       // lessons + cart
@@ -1192,6 +1301,20 @@
         const inToggle = e.target.closest && e.target.closest('[aria-haspopup="listbox"]');
         if (!inToggle) this.closeAllMenus();
       });
+
+      // restore logged-in user from localStorage if present
+      try {
+        const stored = localStorage.getItem('fs_user');
+        if (stored) {
+          const parsed = JSON.parse(stored);
+          if (parsed && parsed.email) {
+            this.currentUser = parsed;
+            this.isAuthenticated = true;
+          }
+        }
+      } catch (e) {
+        console.warn('Could not read user from localStorage:', e);
+      }
 
       // On first load, fetch ALL lessons from backend (GET /lessons)
       this.loadLessonsFromApi('');
