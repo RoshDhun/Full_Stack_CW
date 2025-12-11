@@ -12,6 +12,9 @@
 - **GitHub Repository:**  
 https://github.com/RoshDhun/Full_Stack_CW
 
+**GitHub Repository Pages:**
+https://roshdhun.github.io/Full_Stack_CW/ 
+
 
 This is the Vue.js single–page application (`page.html`) that implements:
 - Lesson browsing with search, sort and filters  
@@ -38,7 +41,8 @@ The Express.js app exposes a REST API using the native MongoDB Node.js driver:
 
 ---
 
-
+Get All Lessons
+https://full-stack-cw-backend-p2lu.onrender.com/lessons
 
 ### Front-End
 
